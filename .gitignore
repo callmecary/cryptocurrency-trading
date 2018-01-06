@@ -107,6 +107,7 @@ venv.bak/
 client_secrets.json
 
 # Project Specific
+account*
 
 # JetBrains
 .idea
