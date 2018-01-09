@@ -1,54 +1,133 @@
-import asyncio, websockets
-import json, hmac, hashlib, time, requests, base64
-from requests.auth import AuthBase
-from account import Account
-
-@asyncio.coroutine
-def hello():
-    websocket = yield from websockets.connect('wss://ws-feed.gdax.com')
-    try:
-        greeting = yield from websocket.recv()
-        print("< {}".format(greeting))
-
-    finally:
-        yield from websocket.close()
+import json
+import base64
+import hmac
+import hashlib
+import time
+from threading import Thread
+from websocket import create_connection, WebSocketConnectionClosedException
 
 
-# Create custom authentication for Exchange
-class CoinbaseExchangeAuth(AuthBase):
-    def __init__(self, api_key, secret_key, passphrase):
+class ClientSocket(object):
+
+    def __init__(self, url="wss://ws-feed.gdax.com", products=None, message_type="subscribe",
+                 auth=False, api_key="", api_secret="", api_passphrase="", channels=None):
+        self.url = url
+        self.products = products
+        self.channels = channels
+        self.type = message_type
+        self.stop = False
+        self.error = None
+        self.ws = None
+        self.thread = None
+        self.auth = auth
         self.api_key = api_key
-        self.secret_key = secret_key
-        self.passphrase = passphrase
+        self.api_secret = api_secret
+        self.api_passphrase = api_passphrase
+        self.msg_count = 0
 
-    def __call__(self, request):
-        timestamp = str(time.time())
-        message = timestamp + request.method+request.path_url+(request.body or '')
-        message = message.encode('ascii')
-        hmac_key = base64.b64decode(self.secret_key)
-        signature = hmac.new(hmac_key, message, hashlib.sha256)
-        signature_b64 = base64.b64encode(signature.digest()).decode('utf-8')
+    def init(self, url='', products=None, message_type='heartbeat',
+             auth=False, api_key='', api_secret='', api_passphrase='',
+             channels=None):
+        self.url = url
+        self.products = products
+        self.channels = channels
+        self.type = message_type
+        self.stop = False
+        self.error = None
+        self.ws = None
+        self.thread = None
+        self.auth = auth
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.api_passphrase = api_passphrase
+        self.msg_count = 0
 
-        request.headers.update({
-            'CB-ACCESS-SIGN': signature_b64,
-            'CB-ACCESS-TIMESTAMP': timestamp,
-            'CB-ACCESS-KEY': self.api_key,
-            'CB-ACCESS-PASSPHRASE': self.passphrase,
-            'Content-Type': 'application/json'
-        })
-        return request
+    def start(self):
+        def _go():
+            self._connect()
+            self._listen()
+            self._disconnect()
 
-def main():
-    api_url = 'https://api.gdax.com/'
-    account = Account()
-    auth = CoinbaseExchangeAuth(account.API_KEY,
-                                account.API_SECRET,
-                                account.API_PASS)
+        self.stop = False
+        self.thread = Thread(target=_go)
+        self.thread.start()
 
-    # Get accounts
-    r = requests.get(api_url + 'accounts', auth=auth)
-    print(r.json())
-    #asyncio.get_event_loop().run_until_complete(hello())
+    def _connect(self):
+        if self.products is None:
+            self.products = ["BTC-USD"]
+        elif not isinstance(self.products, list):
+            self.products = [self.products]
 
-if __name__ == '__main__':
-    main()
+        if self.url[-1] == "/":
+            self.url = self.url[:-1]
+
+        if self.channels is None:
+            sub_params = {'type': 'subscribe', 'product_ids': self.products}
+        else:
+            sub_params = {'type': 'subscribe',
+                          'product_ids': self.products, 'channels': self.channels}
+
+        if self.auth:
+            timestamp = str(time.time())
+            message = timestamp + 'GET' + '/users/self/verify'
+            message = message.encode('ascii')
+            hmac_key = base64.b64decode(self.api_secret)
+            signature = hmac.new(hmac_key, message, hashlib.sha256)
+            signature_b64 = base64.b64encode(
+                signature.digest()).decode('utf-8')
+
+            sub_params['signature'] = signature_b64
+            sub_params['key'] = self.api_key
+            sub_params['passphrase'] = self.api_passphrase
+            sub_params['timestamp'] = timestamp
+
+        self.ws = create_connection(self.url)
+        self.ws.send(json.dumps(sub_params))
+
+        if self.type == "heartbeat":
+            sub_params = {"type": "heartbeat", "on": True}
+        else:
+            sub_params = {"type": "heartbeat", "on": False}
+        self.ws.send(json.dumps(sub_params))
+        print("\n-- Socket Opened --")
+
+    def _listen(self):
+        while not self.stop:
+            try:
+                if int(time.time() % 30) == 0:
+                    # Set a 30 second ping to keep connection alive
+                    self.ws.ping("keepalive")
+                data = self.ws.recv()
+                msg = json.loads(data)
+            except ValueError as e:
+                self.on_error(e)
+            except Exception as e:
+                self.on_error(e)
+            else:
+                self.on_message(msg)
+
+    def _disconnect(self):
+        if self.type == "heartbeat":
+            self.ws.send(json.dumps({"type": "heartbeat", "on": False}))
+        try:
+            if self.ws:
+                self.ws.close()
+        except WebSocketConnectionClosedException as e:
+            pass
+        self.on_close()
+
+    def close(self):
+        self.stop = True
+        self.thread.join()
+
+    def on_close(self):
+        print("\n-- Socket Closed --")
+
+    def on_message(self, msg):
+        print(msg)
+        self.msg_count += 1
+
+    def on_error(self, e, data=None):
+        self.error = e
+        self.stop = True
+        print('{} - data: {}'.format(e, data))
