@@ -24,6 +24,7 @@ class ClientSocket(object):
         self.api_secret = api_secret
         self.api_passphrase = api_passphrase
         self.msg_count = 0
+        self.subscribers = dict()
 
     def init(self, url='', products=None, message_type='heartbeat',
              auth=False, api_key='', api_secret='', api_passphrase='',
@@ -41,6 +42,14 @@ class ClientSocket(object):
         self.api_secret = api_secret
         self.api_passphrase = api_passphrase
         self.msg_count = 0
+
+    def register(self, client, callback=None):
+        if callback == None:
+            callback = getattr(client, 'on_message')
+            self.subscribers[client] = callback
+
+    def unregister(self, client):
+        del self.subscribers[client]
 
     def start(self):
         def _go():
@@ -124,7 +133,10 @@ class ClientSocket(object):
         print("\n-- Socket Closed --")
 
     def on_message(self, msg):
-        print(msg)
+        for subscriber, callback in self.subscribers.items():
+            callback(msg)
+        if msg['type'] == 'l2update':
+            print(msg)
         self.msg_count += 1
 
     def on_error(self, e, data=None):
