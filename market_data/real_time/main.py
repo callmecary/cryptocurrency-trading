@@ -5,7 +5,7 @@ import os
 import requests
 import sys
 from gdax_account import CoinbaseExchangeAuth
-from gdax_connect import ClientSocket
+from client_socket import ClientSocket
 
 
 def testAccount(production):
