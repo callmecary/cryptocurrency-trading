@@ -112,3 +112,6 @@ account*
 # JetBrains
 .idea
 
+# Vscode
+.vscode
+
