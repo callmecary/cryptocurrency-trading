@@ -1,0 +1,25 @@
+{'type': 'l2update', 'product_id': 'BTC-USD', 'time': '2018-01-21T21: 45: 31.594Z', 'changes': [
+        ['sell', '11456.45000000', '0'
+        ]
+    ]
+}
+{'type': 'l2update', 'product_id': 'BTC-USD', 'time': '2018-01-21T21: 45: 31.595Z', 'changes': [
+        ['buy', '11198.32000000', '0.0020623'
+        ]
+    ]
+}
+{'type': 'l2update', 'product_id': 'BTC-USD', 'time': '2018-01-21T21: 45: 31.605Z', 'changes': [
+        ['buy', '11250.25000000', '1.0789154'
+        ]
+    ]
+}
+{'type': 'l2update', 'product_id': 'BTC-USD', 'time': '2018-01-21T21: 45: 31.657Z', 'changes': [
+        ['buy', '11078.01000000', '0.143029'
+        ]
+    ]
+}
+{'type': 'l2update', 'product_id': 'BTC-USD', 'time': '2018-01-21T21: 45: 31.709Z', 'changes': [
+        ['buy', '11191.37000000', '0.39'
+        ]
+    ]
+}
