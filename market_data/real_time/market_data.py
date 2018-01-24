@@ -1,3 +1,4 @@
+""" GDAX market data connection """
 import json
 import base64
 import hmac
@@ -7,7 +8,8 @@ from threading import Thread
 from websocket import create_connection, WebSocketConnectionClosedException
 
 
-class ClientSocket(object):
+class MarketData(object):
+    """ market data class contain all low level market connectivity functions """
 
     def __init__(self, url="wss://ws-feed.gdax.com", products=None, message_type="subscribe",
                  auth=False, api_key="", api_secret="", api_passphrase="", channels=None):
@@ -24,6 +26,8 @@ class ClientSocket(object):
         self.api_secret = api_secret
         self.api_passphrase = api_passphrase
         self.msg_count = 0
+        self.channel_subscribers = {channel: dict()
+                                    for channel in channels}
         self.subscribers = dict()
 
     def init(self, url='', products=None, message_type='heartbeat',
@@ -43,13 +47,26 @@ class ClientSocket(object):
         self.api_passphrase = api_passphrase
         self.msg_count = 0
 
-    def register(self, client, callback=None):
-        if callback == None:
-            callback = getattr(client, 'on_message')
-            self.subscribers[client] = callback
+    def get_channel_subscribers(self, channel):
+        """ get the list of subscribers of this channel """
+        return self.channel_subscribers[channel]
 
-    def unregister(self, client):
-        del self.subscribers[client]
+    def register(self, client, channel, callback=None):
+        """ register client to subscribers list, if callback is None, will call on_message 
+            otherwise, call provided callback function
+                current available channels:
+                'ticker'
+                'heartbeat'
+                'level2'
+                'full'
+        """
+        if callback is None:
+            callback = getattr(client, 'on_message')
+        self.get_channel_subscribers(channel)[client] = callback
+
+    def unregister(self, client, channel):
+        """ remove client from subscribers list """
+        del self.get_channel_subscribers(channel)[client]
 
     def start(self):
         def _go():
@@ -135,7 +152,7 @@ class ClientSocket(object):
     def on_message(self, msg):
         for subscriber, callback in self.subscribers.items():
             callback(msg)
-        if msg['type'] == 'l2update':
+        if msg['type'] == 'ticker':
             print(msg)
         self.msg_count += 1
 
