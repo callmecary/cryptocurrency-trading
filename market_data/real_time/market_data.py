@@ -11,16 +11,15 @@ from websocket import create_connection, WebSocketConnectionClosedException
 class MarketData(object):
     """ market data class contain all low level market connectivity functions """
 
-    def __init__(self, url="wss://ws-feed.gdax.com", products=None, message_type="subscribe",
-                 auth=False, api_key="", api_secret="", api_passphrase="", channels=None):
-        self.url = url
+    def __init__(self, url="wss://ws-feed.gdax.com", products=None, auth=False,
+                 api_key="", api_secret="", api_passphrase="", channels=None):
+        if url.endswith("/"):
+            self.url = url[:-1]
         self.products = products
         self.channels = channels
-        self.type = message_type
         self.stop = False
         self.error = None
-        self.ws = None
-        self.thread = None
+        self.web_socket = None
         self.auth = auth
         self.api_key = api_key
         self.api_secret = api_secret
@@ -28,31 +27,33 @@ class MarketData(object):
         self.msg_count = 0
         self.channel_subscribers = {channel: dict()
                                     for channel in channels}
-        self.subscribers = dict()
 
-    def init(self, url='', products=None, message_type='heartbeat',
-             auth=False, api_key='', api_secret='', api_passphrase='',
-             channels=None):
-        self.url = url
+    def init(self, url='', products=None, auth=False, api_key='',
+             api_secret='', api_passphrase='', channels=None):
+        """ reinitialize the data field, please don't call this if 
+            if you are not sure what you are doing
+        """
+        if url.endswith("/"):
+            self.url = url[:-1]
         self.products = products
         self.channels = channels
-        self.type = message_type
         self.stop = False
         self.error = None
-        self.ws = None
-        self.thread = None
+        self.web_socket = None
         self.auth = auth
         self.api_key = api_key
         self.api_secret = api_secret
         self.api_passphrase = api_passphrase
         self.msg_count = 0
+        self.channel_subscribers = {channel: dict()
+                                    for channel in channels}
 
     def get_channel_subscribers(self, channel):
         """ get the list of subscribers of this channel """
         return self.channel_subscribers[channel]
 
     def register(self, client, channel, callback=None):
-        """ register client to subscribers list, if callback is None, will call on_message 
+        """ register client to subscribers list, if callback is None, will call on_message
             otherwise, call provided callback function
                 current available channels:
                 'ticker'
@@ -107,14 +108,14 @@ class MarketData(object):
             sub_params['passphrase'] = self.api_passphrase
             sub_params['timestamp'] = timestamp
 
-        self.ws = create_connection(self.url)
-        self.ws.send(json.dumps(sub_params))
+        self.web_socket = create_connection(self.url)
+        self.web_socket.send(json.dumps(sub_params))
 
         if self.type == "heartbeat":
             sub_params = {"type": "heartbeat", "on": True}
         else:
             sub_params = {"type": "heartbeat", "on": False}
-        self.ws.send(json.dumps(sub_params))
+        self.web_socket.send(json.dumps(sub_params))
         print("\n-- Socket Opened --")
 
     def _listen(self):
@@ -122,8 +123,8 @@ class MarketData(object):
             try:
                 if int(time.time() % 30) == 0:
                     # Set a 30 second ping to keep connection alive
-                    self.ws.ping("keepalive")
-                data = self.ws.recv()
+                    self.web_socket.ping("keepalive")
+                data = self.web_socket.recv()
                 msg = json.loads(data)
             except ValueError as e:
                 self.on_error(e)
@@ -134,10 +135,11 @@ class MarketData(object):
 
     def _disconnect(self):
         if self.type == "heartbeat":
-            self.ws.send(json.dumps({"type": "heartbeat", "on": False}))
+            self.web_socket.send(json.dumps(
+                {"type": "heartbeat", "on": False}))
         try:
-            if self.ws:
-                self.ws.close()
+            if self.web_socket:
+                self.web_socket.close()
         except WebSocketConnectionClosedException as e:
             pass
         self.on_close()
