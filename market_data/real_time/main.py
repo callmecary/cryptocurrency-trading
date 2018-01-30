@@ -4,8 +4,10 @@ import json
 import os
 import sys
 import requests
+import market_data
 from gdax_account import CoinbaseExchangeAuth
 from client_socket import ClientSocket
+from ..strategies.golden_cross import GoldenCross
 
 
 def test_account(production):
@@ -54,6 +56,14 @@ def main(argv):
     with open(pwd) as json_file:
         account = json.load(json_file)
         production = account['production']
+    golden_cross = GoldenCross(
+        instruments='BTC-USD',
+        qty=1000,
+        interval= '10s',
+        mean_period_short=5,
+        mean_period_long=20,
+        buy_threshold=1.0,
+        sell_threshold=1.0)
     test_account(production)
     test_marketdata(production)
     print('=======PROGRAM STOP============')
